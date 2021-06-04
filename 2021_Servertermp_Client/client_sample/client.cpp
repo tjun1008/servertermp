@@ -4,8 +4,16 @@
 #include <iostream>
 #include <fstream>
 #include <unordered_map>
+//#include <windows.h>
 #include <chrono>
+#include <queue>
+#include <thread>
+#include "protocol.h"
+
 using namespace std;
+using namespace chrono;
+
+thread* chat_thread;
 
 #ifdef _DEBUG
 #pragma comment (lib, "lib/sfml-graphics-s-d.lib")
@@ -22,9 +30,8 @@ using namespace std;
 #pragma comment (lib, "winmm.lib")
 #pragma comment (lib, "ws2_32.lib")
 
-#include "C:\Users\최주은\source\repos\2021_Servertermp\2021_GameServer\protocol.h"
-
 sf::TcpSocket socket;
+
 
 constexpr auto SCREEN_WIDTH = 20;
 constexpr auto SCREEN_HEIGHT = 20;
@@ -38,6 +45,9 @@ int g_left_x;
 int g_top_y;
 int g_myid;
 
+bool chatting_func = false;
+queue<string> chatqueue;
+
 sf::RenderWindow* g_window;
 sf::Font g_font;
 
@@ -48,8 +58,9 @@ private:
 	sf::Text m_name;
 	sf::Text m_level;
 	sf::Text m_hp;
-	chrono::system_clock::time_point m_mess_end_time;
 	sf::Text m_chat;
+	chrono::system_clock::time_point m_mess_end_time;
+
 
 public:
 	int m_x, m_y;
@@ -132,7 +143,14 @@ public:
 		m_hp.setStyle(sf::Text::Bold);
 	}
 	
+	void set_chat(char str[]) {
+		m_chat.setFont(g_font);
+		m_chat.setString(str);
+		m_mess_end_time = system_clock::now() + 1s;
+	}
 };
+
+
 
 OBJECT avatar;
 unordered_map <int, OBJECT> players;
@@ -145,7 +163,11 @@ sf::Texture* board;
 sf::Texture* block;
 sf::Texture* pieces;
 
+
+
 bool g_Map[WORLD_WIDTH][WORLD_HEIGHT];
+
+
 
 void client_initialize()
 {
@@ -255,8 +277,9 @@ void ProcessPacket(char* ptr)
 			npcs[other_id].hide();
 			npcs.erase(other_id);
 		}
-		break;
+		
 	}
+	break;
 	case SC_ADD_OBJECT:
 	{
 		sc_packet_add_object* my_packet = reinterpret_cast<sc_packet_add_object*>(ptr);
@@ -290,9 +313,27 @@ void ProcessPacket(char* ptr)
 			npcs[id].set_level(buf);
 			npcs[id].set_name(my_packet->name);
 		}
-		
-		break;
 	}
+		break;
+
+	case SC_CHAT: 
+	{
+		sc_packet_chat* my_packet = reinterpret_cast<sc_packet_chat*>(ptr);
+		int o_id = my_packet->id;
+	
+		string temp = "[Player: ";
+		temp += to_string(o_id);
+		temp += "] => ";
+		temp += my_packet->message;
+		chatqueue.push(temp);
+
+		//큐가 5개 이상일 경우 POP
+		if (chatqueue.size() > 5)
+			chatqueue.pop();
+
+	}
+				 break;
+	
 	default:
 		printf("Unknown PACKET type [%d]\n", ptr[1]);
 	}
@@ -323,6 +364,91 @@ void process_data(char* net_buf, size_t io_byte)
 	}
 }
 
+void send_chat_packet(const char* chat)
+{
+	chatting_func = false;
+
+	//채팅 전송
+	cs_packet_chat packet;
+	packet.type = CS_CHAT;
+	packet.size = sizeof(packet);
+	strcpy(packet.message, chat);
+	cout << packet.message << endl;
+	size_t sent = 0;
+	socket.send(&packet, sizeof(packet), sent);
+
+
+}
+
+
+void Chatting()
+{
+	chatting_func = true;
+
+	char chat[MAX_STR_LEN];
+	memset(&chat, 0, sizeof(chat));
+
+	cout << "Chatting: ";
+	int cnt = 0;
+
+	while (1) {
+		char ch;
+		cin.get(ch);
+		if (ch == '\n')
+			break;
+		chat[cnt] = ch;
+		cnt += 1;
+		if (cnt >= MAX_STR_LEN)
+			break;
+	}
+	string temp(chat);
+
+	if (temp.size() != 0)
+	{
+		send_chat_packet(chat);
+	}
+	
+	
+	
+
+}
+
+
+
+
+void showChat()
+{
+	queue<string> temp;
+
+
+	for (int i = 0; i < 5; i++)
+	{
+		if (!chatqueue.empty()) {
+
+			sf::Text Chat;
+			Chat.setFont(g_font);
+			char hp_buf[100];
+
+			strcpy_s(hp_buf, chatqueue.front().c_str());
+			Chat.setString(hp_buf);
+			Chat.setPosition(10, 1000 + i * 50);
+			Chat.setCharacterSize(40);
+			if (i % 2 == 0)
+				Chat.setFillColor(sf::Color::Magenta);
+			else
+				Chat.setFillColor(sf::Color::White);
+			Chat.setStyle(sf::Text::Bold);
+			g_window->draw(Chat);
+
+			string cd;
+			cd = chatqueue.front();
+			chatqueue.pop();
+			temp.push(cd);
+		}
+		else break;
+	}
+	chatqueue = temp;
+}
 
 void client_main()
 {
@@ -361,7 +487,59 @@ void client_main()
 	
 		}
 	}
+
+	char buf[100];
+
+	//플레이어 위치 표시
+	sf::Text text;
+	text.setFont(g_font);
 	
+	sprintf_s(buf, "(%d, %d)", avatar.m_x, avatar.m_y);
+	text.setString(buf);
+	text.setPosition(0, 80);
+	text.setCharacterSize(40);
+	text.setFillColor(sf::Color::Black);
+	text.setStyle(sf::Text::Bold);
+	g_window->draw(text);
+
+	//플레이어 HP 표시
+	sf::Text player_hp;
+	player_hp.setFont(g_font);
+	
+	sprintf_s(buf, "HP: %d", avatar.hp);
+	player_hp.setString(buf);
+	player_hp.setPosition(300, 80);
+	player_hp.setCharacterSize(40);
+	player_hp.setFillColor(sf::Color::Red);
+	player_hp.setStyle(sf::Text::Bold);
+	g_window->draw(player_hp);
+
+
+
+	//플레이어 레벨 표시
+	sf::Text player_level;
+	player_level.setFont(g_font);
+	
+	sprintf_s(buf, "Level: %d", avatar.level);
+	player_level.setString(buf);
+	player_level.setPosition(600, 80);
+	player_level.setCharacterSize(40);
+	player_level.setFillColor(sf::Color::Black);
+	player_level.setStyle(sf::Text::Bold);
+	g_window->draw(player_level);
+
+	//플레이어 Exp 표시
+	sf::Text player_exp;
+	player_exp.setFont(g_font);
+	
+	sprintf_s(buf, "Exp: %d", avatar.exp);
+	player_exp.setString(buf);
+	player_exp.setPosition(900, 80);
+	player_exp.setCharacterSize(40);
+	player_exp.setStyle(sf::Text::Bold);
+	g_window->draw(player_exp);
+
+	showChat();
 
 
 	avatar.draw();
@@ -394,6 +572,8 @@ void send_login_packet()
 	size_t sent = 0;
 	socket.send(&packet, sizeof(packet), sent);
 } //
+
+
 
 void init_map()
 {
@@ -470,6 +650,7 @@ int main()
 	sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "2D CLIENT");
 	g_window = &window;
 
+
 	while (window.isOpen())
 	{
 		sf::Event event;
@@ -477,8 +658,11 @@ int main()
 		{
 			if (event.type == sf::Event::Closed)
 				window.close();
+
+
 			if (event.type == sf::Event::KeyPressed) {
 				int dir = -1;
+
 				switch (event.key.code) {
 				case sf::Keyboard::Left:
 					dir = 3;
@@ -492,14 +676,25 @@ int main()
 				case sf::Keyboard::Down:
 					dir = 2;
 					break;
+				case sf::Keyboard::Enter:
+				{
+					char message[MAX_STR_LEN] = {};
+
+					if (chatting_func == false)
+						chat_thread = new thread{ Chatting };
+				}
+					break;
 				case sf::Keyboard::Escape:
 					window.close();
 					break;
+				
 				}
 				if (-1 != dir) send_move_packet(dir);
 
 			}
-		}
+		
+	    }
+
 
 		window.clear();
 		client_main();

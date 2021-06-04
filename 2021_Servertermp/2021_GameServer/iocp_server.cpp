@@ -202,6 +202,16 @@ void send_pc_login(int c_id, int p_id)
 	send_packet(c_id, &packet);
 }
 
+void send_chat_packet(int c_id, int p_id, char* mess)
+{
+	sc_packet_chat p;
+	p.id = p_id;
+	p.size = sizeof(p);
+	p.type = SC_CHAT;
+	strcpy_s(p.message, mess);
+	send_packet(c_id, &p);
+}
+
 void send_pc_logout(int c_id, int p_id)
 {
 	sc_packet_remove_object packet;
@@ -525,7 +535,19 @@ void process_packet(int p_id, unsigned char* packet)
 		player_move(p_id, move_packet->direction);
 		break;
 	}
-
+	case CS_CHAT: {
+		cs_packet_chat* chat_packet = reinterpret_cast<cs_packet_chat*>(packet);
+		//char test[MAX_STR_LEN];
+		//memcpy(test, chat_packet->message, sizeof(chat_packet->message)); //chat_packet->message에서 오류남
+		//cout << test << endl;
+		for (auto& pl : get_nearVl(p_id))
+		{
+			if (!is_npc(pl))
+				send_chat_packet(pl, p_id, chat_packet->message); //상대방에게
+		}
+		send_chat_packet(p_id, p_id, chat_packet->message); //나에게
+	}
+				break;
 	default:
 		cout << "Unknown Packet Type [" << p->type << "] Error\n";
 		exit(-1);
@@ -665,7 +687,7 @@ void do_timer()
 
 	while (true) {
 
-		this_thread::sleep_for(100ms); //너무 빨리 움직여서 조정
+		this_thread::sleep_for(1000ms); //너무 빨리 움직여서 조정
 
 		while (true) {
 			if (false == timer_queue.empty()) {
@@ -825,6 +847,7 @@ void worker()
 
 		}
 		break;
+	
 		default: cout << "Unknown GQCS Error!\n";
 			exit(-1);
 		}

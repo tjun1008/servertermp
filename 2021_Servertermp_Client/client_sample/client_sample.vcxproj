@@ -130,7 +130,6 @@
     <Image Include="wheat.bmp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\2021_Servertermp\2021_GameServer\protocol.h" />
     <ClInclude Include="include\SFML\Config.hpp" />
     <ClInclude Include="include\SFML\Graphics.hpp" />
     <ClInclude Include="include\SFML\Graphics\BlendMode.hpp" />
@@ -210,6 +209,7 @@
     <ClInclude Include="include\SFML\Window\Window.hpp" />
     <ClInclude Include="include\SFML\Window\WindowHandle.hpp" />
     <ClInclude Include="include\SFML\Window\WindowStyle.hpp" />
+    <ClInclude Include="protocol.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="include\SFML\Graphics\Glsl.inl" />

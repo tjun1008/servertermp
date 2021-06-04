@@ -10,7 +10,7 @@ SECTOR_INFO g_ObjectListSector[WORLD_WIDTH][WORLD_HEIGHT];			//섹터마다의 object
 SOCKET listenSocket;
 HANDLE h_iocp;
 
-bool g_Map[WORLD_WIDTH][WORLD_HEIGHT];
+bool Map[WORLD_WIDTH][WORLD_HEIGHT];
 
 void init_map()
 {
@@ -29,14 +29,14 @@ void init_map()
 		case '0':
 			if (j < WORLD_WIDTH)
 			{
-				g_Map[i][j] = true;
+				Map[i][j] = true;
 				++j;
 			}
 			else
 			{
 				j = 0;
 				++i;
-				g_Map[i][j] = true;
+				Map[i][j] = true;
 				++j;
 
 				//printf("%d\n", i);
@@ -45,14 +45,14 @@ void init_map()
 		case '1':
 			if (j < WORLD_WIDTH)
 			{
-				g_Map[i][j] = false;
+				Map[i][j] = false;
 				++j;
 			}
 			else
 			{
 				j = 0;
 				++i;
-				g_Map[i][j] = false;
+				Map[i][j] = false;
 				++j;
 
 				//printf("%d\n", i);
@@ -190,10 +190,14 @@ void send_pc_login(int c_id, int p_id)
 	packet.EXP = Clients[p_id].exp;
 	packet.HP = Clients[p_id].hp;
 	packet.LEVEL = Clients[p_id].level;
+	
+
 	strcpy_s(packet.name, Clients[p_id].m_name);
 	if (true == is_npc(p_id))
 	{
 		packet.obj_class = ORC; 
+		packet.monster_type = Clients[p_id].npcType;
+		packet.monster_move = Clients[p_id].npcMove;
 	}
 	else
 		packet.obj_class = PLAYER;
@@ -202,7 +206,7 @@ void send_pc_login(int c_id, int p_id)
 	send_packet(c_id, &packet);
 }
 
-void send_chat_packet(int c_id, int p_id, char* mess)
+void send_chat(int c_id, int p_id, const char* mess)
 {
 	sc_packet_chat p;
 	p.id = p_id;
@@ -235,7 +239,7 @@ void player_move(int p_id, char dir)
 	case 3: if (x > 0) x--; break;
 	}
 
-	if (g_Map[y][x]) {
+	if (Map[y][x]) {
 
 		g_ObjectListSector[x][y].m_sl.lock();
 
@@ -377,7 +381,7 @@ void do_random_move_npc(int id)
 
 	//g_ObjectListSector[x][y].m_sl.unlock();
 
-	if (g_Map[y][x]) {
+	if (Map[y][x]) {
 
 		Clients[id].m_x = x;
 		Clients[id].m_y = y;
@@ -469,7 +473,7 @@ void process_packet(int p_id, unsigned char* packet)
 			mx = rand() % WORLD_WIDTH;
 			my = rand() % WORLD_HEIGHT;
 
-			if (g_Map[my][mx])
+			if (Map[my][mx])
 				break;
 		}
 
@@ -543,9 +547,9 @@ void process_packet(int p_id, unsigned char* packet)
 		for (auto& pl : get_nearVl(p_id))
 		{
 			if (!is_npc(pl))
-				send_chat_packet(pl, p_id, chat_packet->message); //상대방에게
+				send_chat(pl, p_id, chat_packet->message); //상대방에게
 		}
-		send_chat_packet(p_id, p_id, chat_packet->message); //나에게
+		send_chat(p_id, p_id, chat_packet->message); //나에게
 	}
 				break;
 	default:
@@ -587,6 +591,37 @@ int get_new_player_id()
 
 }
 
+int API_get_x(lua_State* L)
+{
+	int obj_id = lua_tonumber(L, -1);
+	lua_pop(L, 2);
+	int x = Clients[obj_id].m_x;
+	lua_pushnumber(L, x);
+	return 1;
+}
+
+int API_get_y(lua_State* L)
+{
+	int obj_id = lua_tonumber(L, -1);
+	lua_pop(L, 2);
+	int y = Clients[obj_id].m_y;
+	lua_pushnumber(L, y);
+	return 1;
+}
+
+int API_send_message(lua_State* L)
+{
+
+	int obj_id = lua_tonumber(L, -3);
+	int p_id = lua_tonumber(L, -2);
+	const char* mess = lua_tostring(L, -1);
+	send_chat(p_id, obj_id, mess);
+	lua_pop(L, 3);
+
+	return 0;
+}
+
+
 void init_server()
 {
 	//네트워크 초기화
@@ -621,6 +656,68 @@ void init_npc()
 
 		strcpy_s(npc.m_name, to_string(i).c_str()); //이름
 
+		int mx;
+		int my;
+		while (true)
+		{
+			mx = rand() % WORLD_WIDTH;
+			my = rand() % WORLD_HEIGHT;
+
+			if (Map[my][mx])
+				break;
+		}
+
+		npc.m_x = mx;
+		npc.m_y = my;
+
+		npc.level = rand() % 5 + 1; 
+		npc.hp = 100;
+
+		//npc move
+		if (0 == rand() % 2)
+			npc.npcMove = FIX;
+		else
+			npc.npcMove = ROAMING;
+
+		//npc move
+		if (0 == rand() % 2)
+			npc.npcType = PEACE;
+		else
+			npc.npcType = AGRO;
+
+		if(ROAMING == npc.npcMove)
+			add_event(i, OP_RANDOM_MOVE, 1000);
+
+		npc.L = luaL_newstate();
+		luaL_openlibs(npc.L);
+		luaL_loadfile(npc.L, "monster_ai.lua");
+		int error = lua_pcall(npc.L, 0, 0, 0);
+		if (error) cout << lua_tostring(npc.L, -1);
+
+		lua_getglobal(npc.L, "set_o_id");
+		lua_pushnumber(npc.L, i);
+		error = lua_pcall(npc.L, 1, 0, 0);
+		if (error) cout << lua_tostring(npc.L, -1);
+
+		g_ObjectListSector[npc.m_x][npc.m_y].m_sl.lock();
+
+		g_ObjectListSector[npc.m_x][npc.m_y].m_client.emplace(&npc);
+
+		g_ObjectListSector[npc.m_x][npc.m_y].m_sl.unlock(); //섹터에 넣어줌
+
+		lua_register(npc.L, "API_send_message", API_send_message);
+		lua_register(npc.L, "API_get_x", API_get_x);
+		lua_register(npc.L, "API_get_y", API_get_y);
+		
+
+		/*
+		auto& npc = Clients[i];
+		npc.m_id = i;
+		npc.m_state = STATE_SLEEP;
+		npc.last_move_time = 0;
+
+		strcpy_s(npc.m_name, to_string(i).c_str()); //이름
+
 		npc.m_x = rand() % WORLD_WIDTH;
 		npc.m_y = rand() % WORLD_HEIGHT; //랜덤으로 뿌려줌
 		npc.level = rand() % 5 + 1; //차후 수정
@@ -633,6 +730,8 @@ void init_npc()
 		g_ObjectListSector[npc.m_x][npc.m_y].m_client.emplace(&npc);
 
 		g_ObjectListSector[npc.m_x][npc.m_y].m_sl.unlock(); //섹터에 넣어줌
+		*/
+
 	}
 }
 

@@ -41,6 +41,12 @@ constexpr auto WINDOW_WIDTH = TILE_WIDTH * SCREEN_WIDTH + 10;   // size of windo
 constexpr auto WINDOW_HEIGHT = TILE_WIDTH * SCREEN_WIDTH + 10;
 constexpr auto BUF_SIZE = MAX_BUFFER;
 
+enum NPC_TYPE { PEACE, AGRO };
+// Peace: : 때리기 전에는 가만히
+//Agro : 근처에 11x11 영역에 접근하면 쫓아 오기
+
+enum NPC_MOVE { FIX, ROAMING };
+
 int g_left_x;
 int g_top_y;
 int g_myid;
@@ -68,6 +74,10 @@ public:
 	int level;
 	int hp;
 	int exp;
+
+	char npc_Type;
+	char npc_Move;
+
 	OBJECT(sf::Texture& t, int x, int y, int x2, int y2) {
 		m_showing = false;
 		m_sprite.setTexture(t);
@@ -158,10 +168,12 @@ unordered_map <int, OBJECT> npcs;
 
 OBJECT origin_tile;
 OBJECT block_tile;
+OBJECT npc_monster;
 
 sf::Texture* board;
 sf::Texture* block;
 sf::Texture* pieces;
+sf::Texture* monster;
 
 
 
@@ -174,6 +186,7 @@ void client_initialize()
 	board = new sf::Texture;
 	block = new sf::Texture;
 	pieces = new sf::Texture;
+	monster = new sf::Texture;
 
 	if (false == g_font.loadFromFile("cour.ttf")) {
 		cout << "Font Loading Error!\n";
@@ -183,10 +196,12 @@ void client_initialize()
 	board->loadFromFile("wheat.bmp");
 	block->loadFromFile("block.bmp");
 	pieces->loadFromFile("chess2.png");
+	monster->loadFromFile("monster.png");
 
 	origin_tile = OBJECT{ *board, 0, 0, TILE_WIDTH, TILE_WIDTH };
 	block_tile = OBJECT{ *block, 0, 0, TILE_WIDTH, TILE_WIDTH };
 	avatar = OBJECT{ *pieces, 128, 0, 64, 64 };
+	npc_monster = OBJECT{ *pieces, 0, 0, 64, 64 };
 	//avatar.move(4, 4);
 	avatar.hide();
 
@@ -205,7 +220,7 @@ void client_finish()
 	delete board;
 	delete block;
 	delete pieces;
-	
+	delete monster;
 }
 
 void ProcessPacket(char* ptr)
@@ -303,7 +318,19 @@ void ProcessPacket(char* ptr)
 			players[id].set_name(my_packet->name);
 		}
 		else {
-			npcs[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
+
+			if(my_packet->monster_type == PEACE && my_packet->monster_move == FIX)
+				npcs[id] = OBJECT{ *monster, 0, 0, 64, 64 };
+			else if (my_packet->monster_type == PEACE && my_packet->monster_move == ROAMING)
+				npcs[id] = OBJECT{ *monster, 64, 0, 64, 64 };
+			else if (my_packet->monster_type == AGRO && my_packet->monster_move == FIX)
+				npcs[id] = OBJECT{ *monster, 128, 0, 64, 64 };
+			else if (my_packet->monster_type == AGRO && my_packet->monster_move == ROAMING)
+				npcs[id] = OBJECT{ *monster, 192, 0, 64, 64 };
+
+			npcs[id].npc_Type = my_packet->monster_type;
+			npcs[id].npc_Move = my_packet->monster_move;
+
 			npcs[id].move(my_packet->x, my_packet->y);
 			npcs[id].show();
 			sprintf(buf, "Hp : %d", my_packet->HP);

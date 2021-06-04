@@ -14,14 +14,27 @@ using namespace std;
 
 #include "protocol.h"
 
+extern "C" {
+#include "lua.h"
+#include "lauxlib.h"
+#include "lualib.h"
+}
+
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
+#pragma comment (lib, "lua54.lib")
 
 constexpr int NUM_THREADS = 4;
 
 enum OP_TYPE { OP_RECV, OP_SEND, OP_ACCEPT, OP_RANDOM_MOVE, OP_PLAYER_HP_RECOVER};
 enum S_STATE { STATE_FREE, STATE_CONNECTED, STATE_INGAME, STATE_ACTIVE, STATE_SLEEP };
 enum OBJ_TYPE {PLAYER, ORC, DRAGON};
+enum NPC_TYPE {PEACE, AGRO}; 
+// Peace: : 때리기 전에는 가만히
+//Agro : 근처에 11x11 영역에 접근하면 쫓아 오기
+
+enum NPC_MOVE { FIX ,ROAMING };
+
 struct EX_OVER {
 	WSAOVERLAPPED	m_over;
 	WSABUF			m_wsabuf[1];
@@ -41,8 +54,8 @@ struct SESSION
 	int hp;
 	int exp;
 
-	char npcType; //0-peace / 1-argo
-	char npcMoveType; //0-고정 / 1-로밍
+	NPC_TYPE npcType; 
+	NPC_MOVE npcMove; 
 
 	EX_OVER			m_recv_over;
 	unsigned char	m_prev_recv;
@@ -54,6 +67,9 @@ struct SESSION
 	int last_move_time;
 	unordered_set <int> m_viewlist;
 	mutex m_vl;
+
+	lua_State* L;
+	mutex m_sl; //lua lock
 };
 
 struct SECTOR_INFO {

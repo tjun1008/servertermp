@@ -1,6 +1,8 @@
 #pragma once
 
-constexpr int MAX_USER = 210000;                // 서버내의 최대 객체 개수,  객체 ID의 최대 값
+//constexpr int MAX_USER = 210000;                // 서버내의 최대 객체 개수,  객체 ID의 최대 값
+
+constexpr int MAX_USER = 21000; //과부하 심해서 임시로 변경
 constexpr int MAX_STR_LEN = 50;
 constexpr int MAX_ID_LEN = 20;
 constexpr int MAX_BUFFER = 1024;
@@ -85,6 +87,8 @@ struct sc_packet_add_object {
 	int	HP, LEVEL, EXP;
 	char	name[MAX_ID_LEN];
 
+	char monster_type;
+	char monster_move;
 };
 
 
@@ -99,6 +103,8 @@ struct cs_packet_move {
 	char	type;
 	char	direction;		// 0:Up, 1:Down, 2:Left, 3:Right
 	int move_time;
+
+
 };
 
 struct cs_packet_attack {

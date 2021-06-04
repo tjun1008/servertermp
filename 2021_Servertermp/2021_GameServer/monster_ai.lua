@@ -16,3 +16,4 @@ function event_player_move( p_id )
 		end
 	end
 
+end

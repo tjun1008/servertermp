@@ -119,7 +119,7 @@ public:
 		if (chrono::system_clock::now() < m_mess_end_time) {
 			m_chat.setPosition(rx - 10, ry - 20);
 			g_window->draw(m_chat);
-			
+
 		}
 		else {
 			m_name.setPosition(rx - 10, ry - 20);
@@ -152,7 +152,7 @@ public:
 		m_hp.setFillColor(sf::Color(255, 0, 0));
 		m_hp.setStyle(sf::Text::Bold);
 	}
-	
+
 	void set_chat(char str[]) {
 		m_chat.setFont(g_font);
 		m_chat.setString(str);
@@ -240,19 +240,30 @@ void ProcessPacket(char* ptr)
 		avatar.level = packet->LEVEL;
 		avatar.hp = packet->HP;
 		avatar.exp = packet->EXP;
+		strcpy(avatar.name, packet->name);
 
 		char buf[20];
 
-		sprintf(buf, "Hp : %d", packet->HP);
+		sprintf(buf, "Hp : %d", avatar.hp);
 		avatar.set_hp(buf);
 
 		sprintf(buf, "Level : %d", packet->LEVEL);
 		avatar.set_level(buf);
 
+		avatar.set_name(avatar.name);
 
 		//리스폰
 
 		avatar.show();
+	}
+	break;
+	case SC_LOGIN_FAIL:
+	{
+		sc_packet_login_fail* packet = reinterpret_cast<sc_packet_login_fail*>(ptr);
+		cout << "Login Fail " << endl;
+
+		//this_thread::sleep_for(3s);
+		exit(-1);
 	}
 	break;
 	case SC_POSITION:
@@ -292,7 +303,7 @@ void ProcessPacket(char* ptr)
 			npcs[other_id].hide();
 			npcs.erase(other_id);
 		}
-		
+
 	}
 	break;
 	case SC_ADD_OBJECT:
@@ -303,23 +314,26 @@ void ProcessPacket(char* ptr)
 		char buf[20];
 
 
-	
+
 		if (my_packet->obj_class == 0) {
 			players[id] = OBJECT{ *pieces, 64, 0, 64, 64 };
 			players[id].move(my_packet->x, my_packet->y);
-			players[id].show();
 
-			sprintf(buf, "Hp : %d", my_packet->HP);
+
+
+			sprintf(buf, "Hp : %d", avatar.hp);
 			players[id].set_hp(buf);
 
 			sprintf(buf, "Level : %d", my_packet->LEVEL);
 			players[id].set_level(buf);
 
 			players[id].set_name(my_packet->name);
+
+			players[id].show();
 		}
 		else {
 
-			if(my_packet->monster_type == PEACE && my_packet->monster_move == FIX)
+			if (my_packet->monster_type == PEACE && my_packet->monster_move == FIX)
 				npcs[id] = OBJECT{ *monster, 0, 0, 64, 64 };
 			else if (my_packet->monster_type == PEACE && my_packet->monster_move == ROAMING)
 				npcs[id] = OBJECT{ *monster, 64, 0, 64, 64 };
@@ -332,22 +346,24 @@ void ProcessPacket(char* ptr)
 			npcs[id].npc_Move = my_packet->monster_move;
 
 			npcs[id].move(my_packet->x, my_packet->y);
-			npcs[id].show();
+
 			sprintf(buf, "Hp : %d", my_packet->HP);
 			npcs[id].set_hp(buf);
 
 			sprintf(buf, "Level : %d", my_packet->LEVEL);
 			npcs[id].set_level(buf);
 			npcs[id].set_name(my_packet->name);
+
+			npcs[id].show();
 		}
 	}
-		break;
+	break;
 
-	case SC_CHAT: 
+	case SC_CHAT:
 	{
 		sc_packet_chat* my_packet = reinterpret_cast<sc_packet_chat*>(ptr);
 		int o_id = my_packet->id;
-	
+
 		string temp = "[Player: ";
 		temp += to_string(o_id);
 		temp += "] => ";
@@ -359,8 +375,65 @@ void ProcessPacket(char* ptr)
 			chatqueue.pop();
 
 	}
-				 break;
-	
+	break;
+	case SC_STAT_CHANGE:
+	{
+		sc_packet_stat_change* my_packet = reinterpret_cast<sc_packet_stat_change*>(ptr);
+
+		int id = my_packet->id;
+
+
+
+
+		if (id == g_myid)
+		{
+			//cout << my_packet->HP << endl;
+			avatar.exp = my_packet->EXP;
+			avatar.hp = my_packet->HP;
+			avatar.level = my_packet->LEVEL;
+
+			char buf[20];
+			sprintf(buf, "Hp : %d", my_packet->HP);
+			avatar.set_hp(buf);
+
+			sprintf(buf, "Level : %d", my_packet->LEVEL);
+			avatar.set_level(buf);
+
+			avatar.show();
+		}
+		else if (id < NPC_ID_START) {
+			players[id].exp = my_packet->EXP;
+			players[id].hp = my_packet->HP;
+			players[id].level = my_packet->LEVEL;
+			char buf[20];
+
+			sprintf(buf, "Hp : %d", my_packet->HP);
+			players[id].set_hp(buf);
+
+			sprintf(buf, "Level : %d", my_packet->LEVEL);
+			players[id].set_level(buf);
+
+			players[id].show();
+		}
+		else
+		{
+			npcs[id].exp = my_packet->EXP;
+			npcs[id].hp = my_packet->HP;
+			npcs[id].level = my_packet->LEVEL;
+			char buf[20];
+
+			sprintf(buf, "Hp : %d", my_packet->HP);
+			npcs[id].set_hp(buf);
+
+			sprintf(buf, "Level : %d", my_packet->LEVEL);
+			npcs[id].set_level(buf);
+
+			npcs[id].show();
+		}
+
+
+	}
+	break;
 	default:
 		printf("Unknown PACKET type [%d]\n", ptr[1]);
 	}
@@ -418,25 +491,17 @@ void Chatting()
 	cout << "Chatting: ";
 	int cnt = 0;
 
-	while (1) {
-		char ch;
-		cin.get(ch);
-		if (ch == '\n')
-			break;
-		chat[cnt] = ch;
-		cnt += 1;
-		if (cnt >= MAX_STR_LEN)
-			break;
-	}
+
+	scanf_s("%s", chat, MAX_STR_LEN);
 	string temp(chat);
 
 	if (temp.size() != 0)
 	{
 		send_chat_packet(chat);
 	}
-	
-	
-	
+
+
+
 
 }
 
@@ -491,7 +556,7 @@ void client_main()
 	if (recv_result != sf::Socket::NotReady)
 		if (received > 0) process_data(net_buf, received);
 
-	
+
 	for (int i = 0; i < SCREEN_WIDTH; ++i)
 	{
 		for (int j = 0; j < SCREEN_HEIGHT; ++j)
@@ -511,7 +576,7 @@ void client_main()
 				block_tile.a_draw();
 			}
 
-	
+
 		}
 	}
 
@@ -520,7 +585,7 @@ void client_main()
 	//플레이어 위치 표시
 	sf::Text text;
 	text.setFont(g_font);
-	
+
 	sprintf_s(buf, "(%d, %d)", avatar.m_x, avatar.m_y);
 	text.setString(buf);
 	text.setPosition(0, 80);
@@ -532,7 +597,7 @@ void client_main()
 	//플레이어 HP 표시
 	sf::Text player_hp;
 	player_hp.setFont(g_font);
-	
+
 	sprintf_s(buf, "HP: %d", avatar.hp);
 	player_hp.setString(buf);
 	player_hp.setPosition(300, 80);
@@ -546,7 +611,7 @@ void client_main()
 	//플레이어 레벨 표시
 	sf::Text player_level;
 	player_level.setFont(g_font);
-	
+
 	sprintf_s(buf, "Level: %d", avatar.level);
 	player_level.setString(buf);
 	player_level.setPosition(600, 80);
@@ -558,7 +623,7 @@ void client_main()
 	//플레이어 Exp 표시
 	sf::Text player_exp;
 	player_exp.setFont(g_font);
-	
+
 	sprintf_s(buf, "Exp: %d", avatar.exp);
 	player_exp.setString(buf);
 	player_exp.setPosition(900, 80);
@@ -593,12 +658,29 @@ void send_login_packet()
 	auto tt = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
 	name += to_string(tt % 1000);
 
-	avatar.set_name(name.c_str());
+	int p_id;
+	cout << "id를 입력하세요: ";
+	scanf_s("%d", &p_id);
+
+	packet.id = p_id;
+
+	
 	strcpy_s(packet.player_id, name.c_str());
+
 
 	size_t sent = 0;
 	socket.send(&packet, sizeof(packet), sent);
 } //
+
+void send_attack_packet()
+{
+
+	cs_packet_attack packet;
+	packet.size = sizeof(packet);
+	packet.type = CS_ATTACK;
+	size_t sent = 0;
+	socket.send(&packet, sizeof(packet), sent);
+}
 
 
 
@@ -611,7 +693,7 @@ void init_map()
 	int i = 0, j = 0;
 
 
-	while (fscanf(fp, "%c", &data) != EOF) {
+	while (fscanf_s(fp, "%c", &data) != EOF) {
 		//printf("%c", data);
 
 		switch (data)
@@ -658,9 +740,14 @@ void init_map()
 
 int main()
 {
-	
+
 	wcout.imbue(locale("korean"));
-	sf::Socket::Status status = socket.connect("127.0.0.1", SERVER_PORT);
+
+	cout << "IP를 입력하세요: ";
+	char ip[50];
+	scanf_s("%s", ip, 50);
+
+	sf::Socket::Status status = socket.connect(ip, SERVER_PORT);
 
 	socket.setBlocking(false);
 
@@ -671,7 +758,7 @@ int main()
 
 	init_map();
 	client_initialize();
-	
+
 	send_login_packet();
 
 	sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "2D CLIENT");
@@ -710,17 +797,22 @@ int main()
 					if (chatting_func == false)
 						chat_thread = new thread{ Chatting };
 				}
-					break;
+				break;
+				case sf::Keyboard::A:
+				{
+					send_attack_packet();
+				}
+				break;
 				case sf::Keyboard::Escape:
 					window.close();
 					break;
-				
+
 				}
 				if (-1 != dir) send_move_packet(dir);
 
 			}
-		
-	    }
+
+		}
 
 
 		window.clear();

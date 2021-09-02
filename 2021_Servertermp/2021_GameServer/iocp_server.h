@@ -11,6 +11,11 @@ using namespace std;
 #include <set>
 #include <queue>
 #include <atomic>
+#include <atlstr.h>
+#include <random>
+
+#include <windows.h>  
+#include <sqlext.h>  //db
 
 #include "protocol.h"
 
@@ -26,14 +31,14 @@ extern "C" {
 
 constexpr int NUM_THREADS = 4;
 
-enum OP_TYPE { OP_RECV, OP_SEND, OP_ACCEPT, OP_RANDOM_MOVE, OP_PLAYER_HP_RECOVER};
+enum OP_TYPE { OP_RECV, OP_SEND, OP_ACCEPT, OP_RANDOM_MOVE, OP_PLAYER_HP_RECOVER, OP_PLAYER_MOVE, OP_NPC_ATTACK, OP_NPC_RESPAWN };
 enum S_STATE { STATE_FREE, STATE_CONNECTED, STATE_INGAME, STATE_ACTIVE, STATE_SLEEP };
-enum OBJ_TYPE {PLAYER, ORC, DRAGON};
-enum NPC_TYPE {PEACE, AGRO}; 
+enum OBJ_TYPE { PLAYER, ORC, DRAGON };
+enum NPC_TYPE { PEACE, AGRO };
 // Peace: : 때리기 전에는 가만히
 //Agro : 근처에 11x11 영역에 접근하면 쫓아 오기
 
-enum NPC_MOVE { FIX ,ROAMING };
+enum NPC_MOVE { FIX, ROAMING };
 
 struct EX_OVER {
 	WSAOVERLAPPED	m_over;
@@ -41,11 +46,13 @@ struct EX_OVER {
 	unsigned char	m_netbuf[MAX_BUFFER];
 	OP_TYPE			m_op;
 	SOCKET m_csocket;
+	int m_target_id;
 };
 
 struct SESSION
 {
 	int				m_id;
+	int login_id;
 
 	// contents
 	char	m_name[MAX_ID_LEN];
@@ -54,8 +61,8 @@ struct SESSION
 	int hp;
 	int exp;
 
-	NPC_TYPE npcType; 
-	NPC_MOVE npcMove; 
+	NPC_TYPE npcType;
+	NPC_MOVE npcMove;
 
 	EX_OVER			m_recv_over;
 	unsigned char	m_prev_recv;
@@ -63,10 +70,15 @@ struct SESSION
 
 	atomic<S_STATE>	m_state; // 0. free 1. connected 2. ingame
 	mutex m_lock;
-	
+
 	int last_move_time;
 	unordered_set <int> m_viewlist;
 	mutex m_vl;
+
+	SESSION* target = nullptr;
+	mutex m_tl; //target lock
+
+	unsigned m_attack_time;
 
 	lua_State* L;
 	mutex m_sl; //lua lock

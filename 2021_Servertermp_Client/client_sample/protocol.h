@@ -2,7 +2,7 @@
 
 //constexpr int MAX_USER = 210000;                // 서버내의 최대 객체 개수,  객체 ID의 최대 값
 
-constexpr int MAX_USER = 21000; //과부하 심해서 임시로 변경
+constexpr int MAX_USER = 210000; //과부하 심해서 임시로 변경
 constexpr int MAX_STR_LEN = 50;
 constexpr int MAX_ID_LEN = 20;
 constexpr int MAX_BUFFER = 1024;
@@ -13,7 +13,7 @@ constexpr int NPC_ID_START = 10000;		// NPC의 ID가 시작하는 지점, 따라서 플레이�
 #define WORLD_WIDTH	2000
 #define WORLD_HEIGHT	2000
 
-	
+
 #define VIEW_RADIUS		7 // 15x15
 
 #define SERVER_PORT		3500
@@ -41,6 +41,7 @@ struct sc_packet_login_ok {
 	int id;
 	short	x, y;
 	int	HP, LEVEL, EXP;
+	char	name[MAX_ID_LEN];
 };
 
 struct sc_packet_login_fail {
@@ -95,7 +96,8 @@ struct sc_packet_add_object {
 struct cs_packet_login {
 	unsigned char	size;
 	char	type;
-	char       player_id[MAX_ID_LEN ];
+	char       player_id[MAX_ID_LEN];
+	int id;
 };
 
 struct cs_packet_move {

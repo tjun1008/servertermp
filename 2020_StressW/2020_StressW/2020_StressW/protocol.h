@@ -13,7 +13,7 @@ constexpr int NPC_ID_START = 10000;		// NPC의 ID가 시작하는 지점, 따라서 플레이�
 #define WORLD_WIDTH	2000
 #define WORLD_HEIGHT	2000
 
-
+	
 #define VIEW_RADIUS		7 // 15x15
 
 #define SERVER_PORT		3500
@@ -90,13 +90,14 @@ struct sc_packet_add_object {
 
 	char monster_type;
 	char monster_move;
+
 };
 
 
 struct cs_packet_login {
 	unsigned char	size;
 	char	type;
-	char       player_id[MAX_ID_LEN];
+	char       player_id[MAX_ID_LEN ];
 	int id;
 };
 
@@ -105,8 +106,6 @@ struct cs_packet_move {
 	char	type;
 	char	direction;		// 0:Up, 1:Down, 2:Left, 3:Right
 	int move_time;
-
-
 };
 
 struct cs_packet_attack {
